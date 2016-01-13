@@ -1,10 +1,10 @@
 ﻿#include <iostream>
 #include <sstream>
-
 #include <Kinect.h>
 #include <opencv2\opencv.hpp>
-
 #include <atlbase.h>
+#include "C:\Users\mkuser\Documents\K4W2-Book-master\K4W2-Book-master\C++(Native)\02_Depth\KinectV2-Depth-01\KinectV2\ForEnglish.h"
+
 using namespace std;
 // 次のように使います
 // ERROR_CHECK( ::GetDefaultKinectSensor( &kinect ) );
@@ -37,10 +37,14 @@ private:
 	int depthHeight;
 
 	vector<UINT16> depthBuffer;
-	int depthPointX;
-	int depthPointY;
+	int x1 = depthWidth / 2;
+	int y1 = depthHeight / 2;
+	int x2 = 300;
+	int y2 = 300;
 
 	const char* DepthWindowName = "Depth Image";
+
+	bool OnePointisSelected = true;
 
 public:
 
@@ -87,9 +91,11 @@ public:
 		ERROR_CHECK(depthFrameDescription->get_Width(&depthWidth));
 		ERROR_CHECK(depthFrameDescription->get_Height(&depthHeight));
 
-		depthPointX = depthWidth / 2;
-		depthPointY = depthHeight / 2;
+		x1 = depthWidth / 2;
+		y1 = depthHeight / 2;
 
+		x2 = 300;
+		y2 = 300;
 		// Depthの最大値、最小値を取得する
 		UINT16 minDepthReliableDistance;
 		UINT16 maxDepthReliableDistance;
@@ -102,7 +108,32 @@ public:
 
 		// バッファーを作成する
 		depthBuffer.resize(depthWidth * depthHeight);
+
+		cv::namedWindow(DepthWindowName);
+		cv::setMouseCallback(DepthWindowName, &KinectApp::mouseCallback, this);
+
     }
+	static void mouseCallback(int event, int x, int y, int flags, void* userdata)
+	{
+		// 引数に渡したthisポインタを経由してメンバ関数に渡す
+		auto pThis = (KinectApp*)userdata;
+		pThis->mouseCallback(event, x, y, flags);
+	}
+
+	// マウスイベントのコールバック(実処理)
+	void mouseCallback(int event, int x, int y, int flags)
+	{
+		if (event == CV_EVENT_LBUTTONDOWN) {
+			x1 = x;
+			y1 = y;
+			
+		}
+
+		if (event == CV_EVENT_RBUTTONDOWN){
+			x2= x;
+			y2= y;
+		}
+	}
 
     void run()
     {
@@ -125,6 +156,8 @@ private:
         updateInfrared();
 		updateDepthFrame();
     }
+
+
 
     void updateInfrared()
     {
@@ -166,7 +199,10 @@ private:
 		// カラーデータを表示する
 		cv::Mat colorImage(infraredHeight, infraredWidth,
 			CV_16UC1, &infraredBuffer[0]);
+		cv::rectangle(colorImage, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
+
 		cv::imshow("Infrared Image", colorImage);
+
 	}
 
 	void drawDepthFrame()
@@ -174,7 +210,6 @@ private:
 		// Depthデータを表示するかコレ?
 		cv::Mat depthImage(depthHeight, depthWidth, CV_8UC1);
 		// フィルタ後
-		cv::Mat depthAfter(depthHeight, depthWidth, CV_8UC1);
 		// Depthデータを0-255のグレーデータにする
 
 
@@ -184,14 +219,21 @@ private:
 
 		
 		// Depthデータのインデックスを取得して、その場所の距離を表示する
-		int index = (depthPointY * depthWidth) + depthPointX;
+		int index = (y1 * depthWidth) + x1;
 		std::stringstream ss;
-		ss << depthBuffer[index] << "mm X=" << depthPointX << " Y= " << depthPointY;
+		ss << depthBuffer[index] << "mm X=" << x1 << " Y= " << y1;
 
-		cv::circle(depthImage, cv::Point(depthPointX, depthPointY), 3,
+		cv::circle(depthImage, cv::Point(x1, y1), 3,
 			cv::Scalar(255, 255, 255), 2);
-		cv::putText(depthImage, ss.str(), cv::Point(depthPointX, depthPointY),
+
+		cv::circle(depthImage, cv::Point(x2, y2), 3,
+			cv::Scalar(255, 255, 255), 2);
+		cv::putText(depthImage, ss.str(), cv::Point(x1, y1),
 			0, 0.5, cv::Scalar(255, 255, 255));
+		cv::putText(depthImage, ss.str(), cv::Point(x2, y2),
+			0, 0.5, cv::Scalar(255, 255, 255));
+		cv::rectangle(depthImage, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255, 255, 255), 1, 8, 0);
+
 
 		cv::imshow(DepthWindowName, depthImage);
 
