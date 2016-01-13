@@ -3,8 +3,7 @@
 #include <Kinect.h>
 #include <opencv2\opencv.hpp>
 #include <atlbase.h>
-#include "C:\Users\mkuser\Documents\K4W2-Book-master\K4W2-Book-master\C++(Native)\02_Depth\KinectV2-Depth-01\KinectV2\ForEnglish.h"
-
+#include <windef.h>
 using namespace std;
 // 次のように使います
 // ERROR_CHECK( ::GetDefaultKinectSensor( &kinect ) );
@@ -37,10 +36,9 @@ private:
 	int depthHeight;
 
 	vector<UINT16> depthBuffer;
-	int x1 = depthWidth / 2;
-	int y1 = depthHeight / 2;
-	int x2 = 300;
-	int y2 = 300;
+
+	POINT R1;
+	POINT R2;
 
 	const char* DepthWindowName = "Depth Image";
 
@@ -91,11 +89,11 @@ public:
 		ERROR_CHECK(depthFrameDescription->get_Width(&depthWidth));
 		ERROR_CHECK(depthFrameDescription->get_Height(&depthHeight));
 
-		x1 = depthWidth / 2;
-		y1 = depthHeight / 2;
+		R1.x = depthWidth / 2;
+		R1.y = depthHeight / 2;
 
-		x2 = 300;
-		y2 = 300;
+		R2.x = 300;
+		R2.y = 300;
 		// Depthの最大値、最小値を取得する
 		UINT16 minDepthReliableDistance;
 		UINT16 maxDepthReliableDistance;
@@ -124,14 +122,14 @@ public:
 	void mouseCallback(int event, int x, int y, int flags)
 	{
 		if (event == CV_EVENT_LBUTTONDOWN) {
-			x1 = x;
-			y1 = y;
+			R1.x = x;
+			R1.y = y;
 			
 		}
 
 		if (event == CV_EVENT_RBUTTONDOWN){
-			x2= x;
-			y2= y;
+			R2.x= x;
+			R2.y= y;
 		}
 	}
 
@@ -199,7 +197,7 @@ private:
 		// カラーデータを表示する
 		cv::Mat colorImage(infraredHeight, infraredWidth,
 			CV_16UC1, &infraredBuffer[0]);
-		cv::rectangle(colorImage, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
+		cv::rectangle(colorImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
 
 		cv::imshow("Infrared Image", colorImage);
 
@@ -219,20 +217,20 @@ private:
 
 		
 		// Depthデータのインデックスを取得して、その場所の距離を表示する
-		int index = (y1 * depthWidth) + x1;
+		int index = (R1.y * depthWidth) + R1.x;
 		std::stringstream ss;
-		ss << depthBuffer[index] << "mm X=" << x1 << " Y= " << y1;
+		ss << depthBuffer[index] << "mm X=" << R1.x << " Y= " << R1.y;
 
-		cv::circle(depthImage, cv::Point(x1, y1), 3,
+		cv::circle(depthImage, cv::Point(R1.x, R1.y), 3,
 			cv::Scalar(255, 255, 255), 2);
 
-		cv::circle(depthImage, cv::Point(x2, y2), 3,
+		cv::circle(depthImage, cv::Point(R2.x, R2.y), 3,
 			cv::Scalar(255, 255, 255), 2);
-		cv::putText(depthImage, ss.str(), cv::Point(x1, y1),
+		cv::putText(depthImage, ss.str(), cv::Point(R1.x, R1.y),
 			0, 0.5, cv::Scalar(255, 255, 255));
-		cv::putText(depthImage, ss.str(), cv::Point(x2, y2),
+		cv::putText(depthImage, ss.str(), cv::Point(R2.x, R2.y),
 			0, 0.5, cv::Scalar(255, 255, 255));
-		cv::rectangle(depthImage, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255, 255, 255), 1, 8, 0);
+		cv::rectangle(depthImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(255, 255, 255), 1, 8, 0);
 
 
 		cv::imshow(DepthWindowName, depthImage);
