@@ -182,7 +182,7 @@ private:
 			depthImage.data[i] = depthBuffer[i] * 255 / 8000;
 		}
 
-		eae
+		
 		// Depthデータのインデックスを取得して、その場所の距離を表示する
 		int index = (depthPointY * depthWidth) + depthPointX;
 		std::stringstream ss;
