@@ -4,7 +4,11 @@
 #include <opencv2\opencv.hpp>
 #include <atlbase.h>
 #include <windef.h>
+#include <iostream>
+#include <fstream>
 using namespace std;
+
+#define WRITEFRAMENUM 10
 // 次のように使います
 // ERROR_CHECK( ::GetDefaultKinectSensor( &kinect ) );
 // 書籍での解説のためにマクロにしています。実際には展開した形で使うことを検討してください。
@@ -39,10 +43,25 @@ private:
 
 	POINT R1;
 	POINT R2;
+	POINT Begin, End;
+	POINT SizeofCaputuredFrame;
 
+	vector<UINT16> saveDepthArray;
+	vector<UINT16> saveInfraredArray;
+	vector<UINT16> centerDepthArray;
+	vector<UINT16> centerInfraredArray;
+
+	std::ofstream centerDepth;
+	std::ofstream centerInfrared;
+	std::ofstream DepthArray;
+	std::ofstream InfraredArray;
+	std::ofstream WriteFrameSize;
 	const char* DepthWindowName = "Depth Image";
 
 	bool OnePointisSelected = true;
+	bool savingFlag = false;
+	bool arrayResized = false;
+	int frameCounter = 0;
 
 public:
 
@@ -106,9 +125,14 @@ public:
 
 		// バッファーを作成する
 		depthBuffer.resize(depthWidth * depthHeight);
-
 		cv::namedWindow(DepthWindowName);
 		cv::setMouseCallback(DepthWindowName, &KinectApp::mouseCallback, this);
+
+		centerDepth.open("V:\\Eng\\FrameData\\DepthCenterTest.dat");
+		centerInfrared.open("V:\\Eng\\FrameData\\InfraredCenterTest.dat");
+		DepthArray.open("V:\\Eng\\FrameData\\DepthMeasureTest.dat");
+		InfraredArray.open("V:\\Eng\\FrameData\\InfraredMeasureTest.dat");
+		WriteFrameSize.open("V:\\Eng\\FrameData\\sizeofframe.dat");
 
     }
 	static void mouseCallback(int event, int x, int y, int flags, void* userdata)
@@ -143,6 +167,11 @@ public:
             if ( key == 'q' ){
                 break;
             }
+
+			if (key =='s')
+			{
+				savingFlag = true;
+			}
         }
     }
 
@@ -190,6 +219,12 @@ private:
     {
 		drawInfraredFrame();
 		drawDepthFrame();
+		if (savingFlag){
+			if (!arrayResized){
+				initializeForSave();
+			}
+			saveIntoArray();
+		}
     }
 
 	void drawInfraredFrame()
@@ -219,7 +254,7 @@ private:
 		// Depthデータのインデックスを取得して、その場所の距離を表示する
 		int index = (R1.y * depthWidth) + R1.x;
 		std::stringstream ss;
-		ss << depthBuffer[index] << "mm X=" << R1.x << " Y= " << R1.y;
+		ss << depthBuffer[index] << "mm X=" << R1.x << " Y= " << R1.y << " " << frameCounter + 1;
 
 		cv::circle(depthImage, cv::Point(R1.x, R1.y), 3,
 			cv::Scalar(255, 255, 255), 2);
@@ -236,6 +271,66 @@ private:
 		cv::imshow(DepthWindowName, depthImage);
 
 	}
+	void initializeForSave(){
+		Begin.x = R1.x <= R2.x ? R1.x : R2.x;
+		End.x = R1.x > R2.x ? R1.x : R2.x;
+		Begin.y = R1.y <= R2.y ? R1.y : R2.y;
+		End.y = R1.y > R2.y ? R1.y : R2.y;
+		SizeofCaputuredFrame.x = (End.x - Begin.x + 1);
+		SizeofCaputuredFrame.y = (End.y - Begin.y + 1);
+		saveDepthArray.resize( SizeofCaputuredFrame.x* SizeofCaputuredFrame.y * WRITEFRAMENUM);
+		saveInfraredArray.resize(SizeofCaputuredFrame.x * SizeofCaputuredFrame.y * WRITEFRAMENUM);
+
+		centerDepthArray.resize(WRITEFRAMENUM);
+		centerInfraredArray.resize(WRITEFRAMENUM);
+		arrayResized = true;
+
+
+
+	}
+
+	void saveIntoArray()
+	{
+		int index;
+		int index_of_array = 0;
+		for (int j = Begin.y; j <= End.y; j++){
+			for (int i = Begin.x; i <= End.x; i++){
+				index = j * depthWidth + i;
+				saveDepthArray[index_of_array + frameCounter * SizeofCaputuredFrame.x * SizeofCaputuredFrame.y] = depthBuffer[index];
+				saveInfraredArray[index_of_array + frameCounter * SizeofCaputuredFrame.x * SizeofCaputuredFrame.y] = infraredBuffer[index];
+				index_of_array++;
+			}
+		}
+		centerDepthArray[frameCounter] = depthBuffer[Begin.y * depthWidth + Begin.x];
+		centerInfraredArray[frameCounter] = infraredBuffer[Begin.y * infraredWidth + Begin.x];
+		frameCounter++;
+		if (frameCounter == WRITEFRAMENUM - 1){
+			savingFlag = false;
+			writedownToFile();
+			arrayResized = false;
+		}
+	}
+
+	void writedownToFile(){
+		for (int i = 0; i < SizeofCaputuredFrame.x * SizeofCaputuredFrame.y * WRITEFRAMENUM; i++){
+			DepthArray << saveDepthArray[i] << "\r\n";
+			InfraredArray << saveInfraredArray[i] << "\r\n";
+			
+		}
+		for (int j = 0; j < WRITEFRAMENUM; j++){
+			centerDepth << centerDepthArray[j] << "\r\n";
+			centerInfrared << centerInfraredArray[j] << "\r\n";
+		}
+		DepthArray << std::endl;
+		InfraredArray << std::endl;
+		centerDepth << std::endl;
+		centerInfrared << std::endl;
+
+		WriteFrameSize << SizeofCaputuredFrame.x << "\r\n" << SizeofCaputuredFrame.y << "\r\n" << WRITEFRAMENUM << endl;
+
+
+	}
+
 };
 
 void main()
