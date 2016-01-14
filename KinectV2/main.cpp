@@ -9,6 +9,9 @@
 using namespace std;
 
 #define WRITEFRAMENUM 10
+#define FILENAME 2000
+#define MAXIRVALUE 4000
+
 // 次のように使います
 // ERROR_CHECK( ::GetDefaultKinectSensor( &kinect ) );
 // 書籍での解説のためにマクロにしています。実際には展開した形で使うことを検討してください。
@@ -128,11 +131,6 @@ public:
 		cv::namedWindow(DepthWindowName);
 		cv::setMouseCallback(DepthWindowName, &KinectApp::mouseCallback, this);
 
-		centerDepth.open("V:\\Eng\\FrameData\\DepthCenterTest.dat");
-		centerInfrared.open("V:\\Eng\\FrameData\\InfraredCenterTest.dat");
-		DepthArray.open("V:\\Eng\\FrameData\\DepthMeasureTest.dat");
-		InfraredArray.open("V:\\Eng\\FrameData\\InfraredMeasureTest.dat");
-		WriteFrameSize.open("V:\\Eng\\FrameData\\sizeofframe.dat");
 
     }
 	static void mouseCallback(int event, int x, int y, int flags, void* userdata)
@@ -230,6 +228,7 @@ private:
 	void drawInfraredFrame()
 	{
 		// カラーデータを表示する
+		
 		cv::Mat colorImage(infraredHeight, infraredWidth,
 			CV_16UC1, &infraredBuffer[0]);
 		cv::rectangle(colorImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
@@ -256,9 +255,10 @@ private:
 		std::stringstream ss;
 		ss << depthBuffer[index] << "mm X=" << R1.x << " Y= " << R1.y << " " << frameCounter + 1;
 
+		//cv effect for depth image
+
 		cv::circle(depthImage, cv::Point(R1.x, R1.y), 3,
 			cv::Scalar(255, 255, 255), 2);
-
 		cv::circle(depthImage, cv::Point(R2.x, R2.y), 3,
 			cv::Scalar(255, 255, 255), 2);
 		cv::putText(depthImage, ss.str(), cv::Point(R1.x, R1.y),
@@ -266,12 +266,22 @@ private:
 		cv::putText(depthImage, ss.str(), cv::Point(R2.x, R2.y),
 			0, 0.5, cv::Scalar(255, 255, 255));
 		cv::rectangle(depthImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(255, 255, 255), 1, 8, 0);
+		//cv effect for infrared image
+
+
 
 
 		cv::imshow(DepthWindowName, depthImage);
 
 	}
 	void initializeForSave(){
+
+		centerDepth.open("V:\\Eng\\FrameData\\DepthCenter" + to_string(FILENAME) + ".dat");
+		centerInfrared.open("V:\\Eng\\FrameData\\InfraredCenter" + to_string(FILENAME) + ".dat");
+		DepthArray.open("V:\\Eng\\FrameData\\DepthMeasure" + to_string(FILENAME) + ".dat");
+		InfraredArray.open("V:\\Eng\\FrameData\\InfraredMeasure" + to_string(FILENAME) + ".dat");
+		WriteFrameSize.open("V:\\Eng\\FrameData\\sizeofframe" + to_string(FILENAME) + ".dat");
+		
 		Begin.x = R1.x <= R2.x ? R1.x : R2.x;
 		End.x = R1.x > R2.x ? R1.x : R2.x;
 		Begin.y = R1.y <= R2.y ? R1.y : R2.y;
@@ -330,6 +340,12 @@ private:
 
 
 	}
+	// for visible
+	void InfraredProcess(){
+		for (int i = 0; i < depthWidth * depthHeight; i++){
+			infraredBuffer[i] = infraredBuffer[i] < MAXIRVALUE ? infraredBuffer[i] : 65535;
+		}
+	}
 
 };
 
@@ -344,3 +360,4 @@ void main()
         std::cout << ex.what() << std::endl;
     }
 }
+
