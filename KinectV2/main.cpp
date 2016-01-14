@@ -8,7 +8,7 @@
 #include <fstream>
 using namespace std;
 
-#define WRITEFRAMENUM 10
+#define WRITEFRAMENUM 1024
 #define FILENAME 2000
 #define MAXIRVALUE 4000
 
@@ -59,6 +59,8 @@ private:
 	std::ofstream DepthArray;
 	std::ofstream InfraredArray;
 	std::ofstream WriteFrameSize;
+	vector<stringstream> ss;
+
 	const char* DepthWindowName = "Depth Image";
 
 	bool OnePointisSelected = true;
@@ -128,9 +130,11 @@ public:
 
 		// バッファーを作成する
 		depthBuffer.resize(depthWidth * depthHeight);
+		ss.resize(4);
+		
 		cv::namedWindow(DepthWindowName);
 		cv::setMouseCallback(DepthWindowName, &KinectApp::mouseCallback, this);
-
+		
 
     }
 	static void mouseCallback(int event, int x, int y, int flags, void* userdata)
@@ -177,9 +181,10 @@ private:
 
     // データの更新処理
     void update()
-    {
-        updateInfrared();
+	{
+		updateInfrared();
 		updateDepthFrame();
+		
     }
 
 
@@ -215,13 +220,20 @@ private:
 	}
     void draw()
     {
-		drawInfraredFrame();
-		drawDepthFrame();
+		setTextOver();
+		
+		
+
 		if (savingFlag){
 			if (!arrayResized){
 				initializeForSave();
 			}
 			saveIntoArray();
+		}
+
+		else{
+			drawInfraredFrame();
+			drawDepthFrame();
 		}
     }
 
@@ -231,6 +243,16 @@ private:
 		
 		cv::Mat colorImage(infraredHeight, infraredWidth,
 			CV_16UC1, &infraredBuffer[0]);
+
+
+		cv::circle(colorImage, cv::Point(R1.x, R1.y), 3,
+			cv::Scalar(65535, 65535, 65535), 2);
+		cv::circle(colorImage, cv::Point(R2.x, R2.y), 3,
+			cv::Scalar(65535, 65535, 65535), 2);
+		cv::putText(colorImage, ss[2].str(), cv::Point(R1.x, R1.y),
+			0, 0.5, cv::Scalar(65535, 65535, 65535));
+		cv::putText(colorImage, ss[3].str(), cv::Point(R2.x, R2.y),
+			0, 0.5, cv::Scalar(65535, 65535, 65535));
 		cv::rectangle(colorImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
 
 		cv::imshow("Infrared Image", colorImage);
@@ -251,24 +273,18 @@ private:
 
 		
 		// Depthデータのインデックスを取得して、その場所の距離を表示する
-		int index = (R1.y * depthWidth) + R1.x;
-		std::stringstream ss;
-		ss << depthBuffer[index] << "mm X=" << R1.x << " Y= " << R1.y << " " << frameCounter + 1;
-
-		//cv effect for depth image
+		
 
 		cv::circle(depthImage, cv::Point(R1.x, R1.y), 3,
 			cv::Scalar(255, 255, 255), 2);
 		cv::circle(depthImage, cv::Point(R2.x, R2.y), 3,
 			cv::Scalar(255, 255, 255), 2);
-		cv::putText(depthImage, ss.str(), cv::Point(R1.x, R1.y),
+		cv::putText(depthImage, ss[0].str(), cv::Point(R1.x, R1.y),
 			0, 0.5, cv::Scalar(255, 255, 255));
-		cv::putText(depthImage, ss.str(), cv::Point(R2.x, R2.y),
+		cv::putText(depthImage, ss[1].str(), cv::Point(R2.x, R2.y),
 			0, 0.5, cv::Scalar(255, 255, 255));
 		cv::rectangle(depthImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(255, 255, 255), 1, 8, 0);
 		//cv effect for infrared image
-
-
 
 
 		cv::imshow(DepthWindowName, depthImage);
@@ -316,8 +332,9 @@ private:
 		frameCounter++;
 		if (frameCounter == WRITEFRAMENUM - 1){
 			savingFlag = false;
-			writedownToFile();
 			arrayResized = false;
+			writedownToFile();
+
 		}
 	}
 
@@ -340,11 +357,24 @@ private:
 
 
 	}
-	// for visible
-	void InfraredProcess(){
-		for (int i = 0; i < depthWidth * depthHeight; i++){
-			infraredBuffer[i] = infraredBuffer[i] < MAXIRVALUE ? infraredBuffer[i] : 65535;
+	// for visible ごみ関数
+
+
+	void setTextOver(){
+		vector<int> index(2);
+
+		index[0] = R1.y * depthWidth + R1.x;
+		index[1] = R2.y * depthWidth + R2.x;
+		for (int i = 0; i < 4; i++){
+			ss[i].str("");
 		}
+		//depth overray
+		ss[0] << depthBuffer[index[0]] << "mm X=" << R1.x << " Y= " << R1.y << " " << frameCounter + 1;
+		ss[1] << depthBuffer[index[1]] << "mm X=" << R2.x << " Y= " << R2.y;
+		//ir overray
+		ss[2] << infraredBuffer[index[0]] << " X=" << R1.x << " Y= " << R1.y << " " << frameCounter + 1;
+		ss[3] << infraredBuffer[index[1]] << " X=" << R2.x << " Y= " << R2.y;
+		//cv effect for depth image
 	}
 
 };
