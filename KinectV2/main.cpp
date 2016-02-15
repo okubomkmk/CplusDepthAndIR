@@ -8,8 +8,7 @@
 #include <fstream>
 using namespace std;
 
-#define WRITEFRAMENUM 1024
-#define FILENAME 2000
+#define WRITEFRAMENUM 36
 #define MAXIRVALUE 4000
 
 // 次のように使います
@@ -28,6 +27,7 @@ private:
 
     // Kinect SDK
     CComPtr<IKinectSensor> kinect = nullptr;
+	CComPtr<ICoordinateMapper> coordinateMapper = nullptr;
 
     CComPtr<IInfraredFrameReader> infraredFrameReader = nullptr;
 
@@ -54,15 +54,20 @@ private:
 	vector<UINT16> centerDepthArray;
 	vector<UINT16> centerInfraredArray;
 
-	std::ofstream centerDepth;
-	std::ofstream centerInfrared;
-	std::ofstream DepthArray;
-	std::ofstream InfraredArray;
+	vector<vector<int>> coordinateArray;
+
+	vector<UINT16> IRviewArray;
+
+	std::ofstream StreamCenterDepth;
+	std::ofstream StreamCenterInfrared;
+	std::ofstream StreamDepthArray;
+	std::ofstream StreamInfraredArray;
 	std::ofstream WriteFrameSize;
-	vector<stringstream> ss;
-
+	std::ofstream StreamMapper;
+	std::vector<stringstream> ss;
+	IDepthFrameArrivedEventArgs* e{nullptr};
 	const char* DepthWindowName = "Depth Image";
-
+	const char* InfraredWindowName = "IR Image";
 	bool OnePointisSelected = true;
 	bool savingFlag = false;
 	bool arrayResized = false;
@@ -99,7 +104,7 @@ public:
 
         // バッファーを作成する
         infraredBuffer.resize( infraredWidth * infraredHeight );
-
+		IRviewArray.resize(infraredWidth * infraredHeight);
 
 		// Depthリーダーを取得する
 		CComPtr<IDepthFrameSource> depthFrameSource;
@@ -113,11 +118,11 @@ public:
 		ERROR_CHECK(depthFrameDescription->get_Width(&depthWidth));
 		ERROR_CHECK(depthFrameDescription->get_Height(&depthHeight));
 
-		R1.x = depthWidth / 2;
-		R1.y = depthHeight / 2;
+		R1.x = 0;
+		R1.y = 0;
 
-		R2.x = 300;
-		R2.y = 300;
+		R2.x = depthWidth -1;
+		R2.y = depthHeight -1;
 		// Depthの最大値、最小値を取得する
 		UINT16 minDepthReliableDistance;
 		UINT16 maxDepthReliableDistance;
@@ -125,25 +130,37 @@ public:
 			&minDepthReliableDistance));
 		ERROR_CHECK(depthFrameSource->get_DepthMaxReliableDistance(
 			&maxDepthReliableDistance));
-		std::cout << "Depth最小値       : " << minDepthReliableDistance << endl;
-		cout << "Depth最大値       : " << maxDepthReliableDistance << endl;
-
+		
 		// バッファーを作成する
 		depthBuffer.resize(depthWidth * depthHeight);
 		ss.resize(4);
 		
 		cv::namedWindow(DepthWindowName);
-		cv::setMouseCallback(DepthWindowName, &KinectApp::mouseCallback, this);
+		cv::setMouseCallback(DepthWindowName, &KinectApp::mouseCallbackDepth, this);
+
+		cv::namedWindow(InfraredWindowName);
+		cv::setMouseCallback(InfraredWindowName, &KinectApp::mouseCallbackInfrared, this);
+
+		kinect->get_CoordinateMapper(&coordinateMapper);
+
+		// event 作成?
+
 		
 
     }
-	static void mouseCallback(int event, int x, int y, int flags, void* userdata)
+	static void mouseCallbackDepth(int event, int x, int y, int flags, void* userdata)
 	{
 		// 引数に渡したthisポインタを経由してメンバ関数に渡す
 		auto pThis = (KinectApp*)userdata;
 		pThis->mouseCallback(event, x, y, flags);
 	}
 
+	static void mouseCallbackInfrared(int event, int x, int y, int flags, void* userdata)
+	{
+		// 引数に渡したthisポインタを経由してメンバ関数に渡す
+		auto pThis = (KinectApp*)userdata;
+		pThis->mouseCallback(event, x, y, flags);
+	}
 	// マウスイベントのコールバック(実処理)
 	void mouseCallback(int event, int x, int y, int flags)
 	{
@@ -170,7 +187,7 @@ public:
                 break;
             }
 
-			if (key =='s')
+			if (key == 's')
 			{
 				savingFlag = true;
 			}
@@ -180,13 +197,13 @@ public:
 private:
 
     // データの更新処理
-    void update()
+
+
+	void update()
 	{
 		updateInfrared();
 		updateDepthFrame();
-		
     }
-
 
 
     void updateInfrared()
@@ -225,10 +242,12 @@ private:
 		
 
 		if (savingFlag){
+
 			if (!arrayResized){
 				initializeForSave();
 			}
-			saveIntoArray();
+			saveIntoArrayDepth();
+
 		}
 
 		else{
@@ -240,9 +259,10 @@ private:
 	void drawInfraredFrame()
 	{
 		// カラーデータを表示する
-		
+		VerifyIRdata();
+			
 		cv::Mat colorImage(infraredHeight, infraredWidth,
-			CV_16UC1, &infraredBuffer[0]);
+			CV_16UC1, &IRviewArray[0]);
 
 
 		cv::circle(colorImage, cv::Point(R1.x, R1.y), 3,
@@ -255,7 +275,7 @@ private:
 			0, 0.5, cv::Scalar(65535, 65535, 65535));
 		cv::rectangle(colorImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
 
-		cv::imshow("Infrared Image", colorImage);
+		cv::imshow(InfraredWindowName, colorImage);
 
 	}
 
@@ -263,7 +283,6 @@ private:
 	{
 		// Depthデータを表示するかコレ?
 		cv::Mat depthImage(depthHeight, depthWidth, CV_8UC1);
-		// フィルタ後
 		// Depthデータを0-255のグレーデータにする
 
 
@@ -291,12 +310,13 @@ private:
 
 	}
 	void initializeForSave(){
-
-		centerDepth.open("V:\\Eng\\FrameData\\DepthCenter" + to_string(FILENAME) + ".dat");
-		centerInfrared.open("V:\\Eng\\FrameData\\InfraredCenter" + to_string(FILENAME) + ".dat");
-		DepthArray.open("V:\\Eng\\FrameData\\DepthMeasure" + to_string(FILENAME) + ".dat");
-		InfraredArray.open("V:\\Eng\\FrameData\\InfraredMeasure" + to_string(FILENAME) + ".dat");
-		WriteFrameSize.open("V:\\Eng\\FrameData\\sizeofframe" + to_string(FILENAME) + ".dat");
+		string FILENAME = "cplus";
+		StreamCenterDepth.open("V:\\Eng\\FrameData\\DepthCenter" + (FILENAME) + ".dat");
+		StreamCenterInfrared.open("V:\\Eng\\FrameData\\InfraredCenter" + (FILENAME) + ".dat");
+		StreamDepthArray.open("V:\\EnglishPaperPresentation\\Mapper\\DepthMeasure" + (FILENAME) + ".dat");
+		StreamInfraredArray.open("V:\\Eng\\FrameData\\InfraredMeasure" + (FILENAME) + ".dat");
+		WriteFrameSize.open("V:\\EnglishPaperPresentation\\Mapper\\sizeofframe" + (FILENAME) + ".dat");
+		StreamMapper.open("V:\\EnglishPaperPresentation\\Mapper\\Mapper" + (FILENAME)+".dat");
 		
 		Begin.x = R1.x <= R2.x ? R1.x : R2.x;
 		End.x = R1.x > R2.x ? R1.x : R2.x;
@@ -306,6 +326,11 @@ private:
 		SizeofCaputuredFrame.y = (End.y - Begin.y + 1);
 		saveDepthArray.resize( SizeofCaputuredFrame.x* SizeofCaputuredFrame.y * WRITEFRAMENUM);
 		saveInfraredArray.resize(SizeofCaputuredFrame.x * SizeofCaputuredFrame.y * WRITEFRAMENUM);
+		coordinateArray.resize(depthHeight * depthWidth * WRITEFRAMENUM);
+		
+		for (int i = 0; i < depthHeight * depthWidth * WRITEFRAMENUM; i++){
+			coordinateArray[i].resize(2);
+		}
 
 		centerDepthArray.resize(WRITEFRAMENUM);
 		centerInfraredArray.resize(WRITEFRAMENUM);
@@ -315,7 +340,7 @@ private:
 
 	}
 
-	void saveIntoArray()
+	void saveIntoArrayDepth()
 	{
 		int index;
 		int index_of_array = 0;
@@ -323,42 +348,84 @@ private:
 			for (int i = Begin.x; i <= End.x; i++){
 				index = j * depthWidth + i;
 				saveDepthArray[index_of_array + frameCounter * SizeofCaputuredFrame.x * SizeofCaputuredFrame.y] = depthBuffer[index];
-				saveInfraredArray[index_of_array + frameCounter * SizeofCaputuredFrame.x * SizeofCaputuredFrame.y] = infraredBuffer[index];
 				index_of_array++;
 			}
 		}
 		centerDepthArray[frameCounter] = depthBuffer[Begin.y * depthWidth + Begin.x];
-		centerInfraredArray[frameCounter] = infraredBuffer[Begin.y * infraredWidth + Begin.x];
 		frameCounter++;
 		if (frameCounter == WRITEFRAMENUM - 1){
-			savingFlag = false;
-			arrayResized = false;
-			writedownToFile();
-
+			writedownToFileDepth();
 		}
 	}
 
-	void writedownToFile(){
+	void saveIntoArrayInfrared()
+	{
+		int index;
+		int index_of_array = 0;
+		for (int j = Begin.y; j <= End.y; j++){
+			for (int i = Begin.x; i <= End.x; i++){
+				index = j * depthWidth + i;
+				saveInfraredArray[index_of_array + frameCounter * SizeofCaputuredFrame.x * SizeofCaputuredFrame.y] = infraredBuffer[index];
+				index_of_array++;
+			}
+		}
+		centerInfraredArray[frameCounter] = infraredBuffer[Begin.y * depthWidth + Begin.x];
+		frameCounter++;
+		if (frameCounter == WRITEFRAMENUM - 1){
+			writedownToFileInfrared();
+		}
+	}
+
+	void writedownToFileDepth(){
 		for (int i = 0; i < SizeofCaputuredFrame.x * SizeofCaputuredFrame.y * WRITEFRAMENUM; i++){
-			DepthArray << saveDepthArray[i] << "\r\n";
-			InfraredArray << saveInfraredArray[i] << "\r\n";
+			StreamDepthArray << saveDepthArray[i] << "\r\n";			
 			
 		}
 		for (int j = 0; j < WRITEFRAMENUM; j++){
-			centerDepth << centerDepthArray[j] << "\r\n";
-			centerInfrared << centerInfraredArray[j] << "\r\n";
+			StreamCenterDepth << centerDepthArray[j] << "\r\n";
 		}
-		DepthArray << std::endl;
-		InfraredArray << std::endl;
-		centerDepth << std::endl;
-		centerInfrared << std::endl;
 
-		WriteFrameSize << SizeofCaputuredFrame.x << "\r\n" << SizeofCaputuredFrame.y << "\r\n" << WRITEFRAMENUM << endl;
 
+		StreamCenterDepth << std::endl;
+		StreamDepthArray << std::endl;
+		finalize();
 
 	}
-	// for visible ごみ関数
 
+	void writedownToFileInfrared(){
+		for (int i = 0; i < SizeofCaputuredFrame.x * SizeofCaputuredFrame.y * WRITEFRAMENUM; i++){
+			StreamInfraredArray << saveInfraredArray[i] << "\r\n";
+
+		}
+		for (int j = 0; j < WRITEFRAMENUM; j++){
+			StreamCenterInfrared << centerInfraredArray[j] << "\r\n";
+		}
+
+	}
+
+	void writedownToFileMapper()
+	{
+		for (int i = 0; i < depthWidth * depthHeight* WRITEFRAMENUM; i++){
+			StreamMapper << coordinateArray[i][0] << " " << coordinateArray[i][1] << "\r\n";
+		}
+		StreamMapper << std::endl;
+	}
+	// for visible ごみ関数
+	void VerifyIRdata(){
+		int MaxIntensity = 16000;
+		for (int i = 0; i < infraredWidth * infraredHeight; i++){
+
+			IRviewArray[i] = infraredBuffer[i] <= MaxIntensity ? (UINT16)(infraredBuffer[i] * 65535 / MaxIntensity) : 65535;
+		}
+	}
+
+	void finalize(){
+		StreamCenterInfrared << std::endl;
+		StreamInfraredArray << std::endl;
+		savingFlag = false;
+		arrayResized = false;
+		WriteFrameSize << SizeofCaputuredFrame.x << "\r\n" << SizeofCaputuredFrame.y << "\r\n" << WRITEFRAMENUM << endl;
+	}
 
 	void setTextOver(){
 		vector<int> index(2);
@@ -375,6 +442,28 @@ private:
 		ss[2] << infraredBuffer[index[0]] << " X=" << R1.x << " Y= " << R1.y << " " << frameCounter + 1;
 		ss[3] << infraredBuffer[index[1]] << " X=" << R2.x << " Y= " << R2.y;
 		//cv effect for depth image
+	}
+
+	void updateCoordinate(){
+
+		// Depth画像の解像度でデータを作る
+		// Depth座標系に対応するカラー座標系の一覧を取得する
+		std::vector<ColorSpacePoint> colorSpace(depthWidth * depthHeight);
+		coordinateMapper->MapDepthFrameToColorSpace(
+			depthBuffer.size(), &depthBuffer[0], colorSpace.size(), &colorSpace[0]);
+
+		// 人を検出した個所のみカラー画像を表示する
+
+
+		for (int i = 0; i < depthWidth * depthHeight; ++i){
+
+
+			int colorX = (int)colorSpace[i].X;
+			int colorY = (int)colorSpace[i].Y;
+			std::cout << colorX << " " << colorY << "\r\n";
+
+
+		}
 	}
 
 };
