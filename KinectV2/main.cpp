@@ -127,11 +127,6 @@ public:
 		ERROR_CHECK(depthFrameDescription->get_Width(&depthWidth));
 		ERROR_CHECK(depthFrameDescription->get_Height(&depthHeight));
 
-		R1.x = 0;
-		R1.y = 0;
-
-		R2.x = depthWidth -1;
-		R2.y = depthHeight -1;
 		// Depthの最大値、最小値を取得する
 		UINT16 minDepthReliableDistance;
 		UINT16 maxDepthReliableDistance;
@@ -151,6 +146,12 @@ public:
 		cv::setMouseCallback(InfraredWindowName, &KinectApp::mouseCallbackInfrared, this);
 
 		kinect->get_CoordinateMapper(&coordinateMapper);
+
+		R1.x = 0;
+		R1.y = 0;
+
+		R2.x = depthWidth - 1;
+		R2.y = depthHeight - 1;
 
 		// event 作成?
 
@@ -247,8 +248,6 @@ private:
     void draw()
     {
 		setTextOver();
-		
-		
 
 		if (savingFlag){
 
@@ -256,6 +255,8 @@ private:
 				initializeForSave();
 			}
 			saveIntoArrayDepth();
+			saveIntoArrayInfrared();
+			frameCounter++;
 			screenShotGotFlag = true;
 		}
 
@@ -326,14 +327,16 @@ private:
 
 	}
 	void initializeForSave(){
-		string PassUnix = "/home/mkuser/KinectIR/newversion/";
+		string directoryName = "cplusplus";
+		
+		string PassUnix = "/home/mkuser/KinectIR/" + directoryName + "/";
 		StreamCenterDepth.open(Pass + "DepthCenter" + (FILENAME) + ".dat");
 		StreamCenterInfrared.open(Pass + "InfraredCenter"+ (FILENAME) + ".dat");
-		Pass = "V:\\KinectIR\\cplusplus\\";
+		Pass = "V:\\KinectIR\\" + directoryName + "\\";
 		DepthPass = Pass + "Depth" + (FILENAME)+".dat";
 		infraredPass = Pass + "Infrared" + (FILENAME)+".dat";
 		DepthPassUnix = PassUnix + "Depth" + (FILENAME)+".dat";
-		infraredPass = PassUnix + "Infrared" + (FILENAME)+".dat";
+		InfraredPassUnix = PassUnix + "Infrared" + (FILENAME)+".dat";
 
 		StreamDepthArray.open(DepthPass);
 		StreamInfraredArray.open(infraredPass);
@@ -376,7 +379,6 @@ private:
 			}
 		}
 		centerDepthArray[frameCounter] = depthBuffer[Begin.y * depthWidth + Begin.x];
-		frameCounter++;
 		if (frameCounter == WRITEFRAMENUM - 1){
 			writedownToFileDepth();
 		}
@@ -394,7 +396,6 @@ private:
 			}
 		}
 		centerInfraredArray[frameCounter] = infraredBuffer[Begin.y * depthWidth + Begin.x];
-		frameCounter++;
 		if (frameCounter == WRITEFRAMENUM - 1){
 			writedownToFileInfrared();
 		}
@@ -412,7 +413,6 @@ private:
 
 		StreamCenterDepth << std::endl;
 		StreamDepthArray << std::endl;
-		finalize();
 
 	}
 
@@ -424,6 +424,9 @@ private:
 		for (int j = 0; j < WRITEFRAMENUM; j++){
 			StreamCenterInfrared << centerInfraredArray[j] << "\r\n";
 		}
+		StreamCenterInfrared << std::endl;
+		StreamInfraredArray << std::endl;
+		finalize();
 
 	}
 
