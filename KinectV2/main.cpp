@@ -8,8 +8,9 @@
 #include <fstream>
 using namespace std;
 
-#define WRITEFRAMENUM 36
+#define WRITEFRAMENUM 3
 #define MAXIRVALUE 4000
+#define FILENAME "cplus"
 
 // 次のように使います
 // ERROR_CHECK( ::GetDefaultKinectSensor( &kinect ) );
@@ -62,7 +63,8 @@ private:
 	std::ofstream StreamCenterInfrared;
 	std::ofstream StreamDepthArray;
 	std::ofstream StreamInfraredArray;
-	std::ofstream WriteFrameSize;
+	std::ofstream WriteFrameSizeDepth;
+	std::ofstream WriteFrameSizeInfrared;
 	std::ofstream StreamMapper;
 	std::vector<stringstream> ss;
 	IDepthFrameArrivedEventArgs* e{nullptr};
@@ -71,7 +73,14 @@ private:
 	bool OnePointisSelected = true;
 	bool savingFlag = false;
 	bool arrayResized = false;
+	bool screenShotGotFlag = false;
 	int frameCounter = 0;
+
+	string infraredPass;
+	string DepthPass;
+	string InfraredPassUnix;
+	string DepthPassUnix;
+	string Pass;
 
 public:
 
@@ -247,12 +256,13 @@ private:
 				initializeForSave();
 			}
 			saveIntoArrayDepth();
-
+			screenShotGotFlag = true;
 		}
 
 		else{
 			drawInfraredFrame();
 			drawDepthFrame();
+			screenShotGotFlag = false;
 		}
     }
 
@@ -276,6 +286,9 @@ private:
 		cv::rectangle(colorImage, cv::Point(R1.x, R1.y), cv::Point(R2.x, R2.y), cv::Scalar(65535, 65535, 65535), 1, 8, 0);
 
 		cv::imshow(InfraredWindowName, colorImage);
+		if (screenShotGotFlag){
+			cv::imwrite(Pass + "InfraredScreenShot" + FILENAME + ".bmp", colorImage);
+		}
 
 	}
 
@@ -307,16 +320,27 @@ private:
 
 
 		cv::imshow(DepthWindowName, depthImage);
+		if (screenShotGotFlag){
+			cv::imwrite(Pass + "DepthScreenShot" + FILENAME + ".bmp", depthImage);
+		}
 
 	}
 	void initializeForSave(){
-		string FILENAME = "cplus";
-		StreamCenterDepth.open("V:\\Eng\\FrameData\\DepthCenter" + (FILENAME) + ".dat");
-		StreamCenterInfrared.open("V:\\Eng\\FrameData\\InfraredCenter" + (FILENAME) + ".dat");
-		StreamDepthArray.open("V:\\EnglishPaperPresentation\\Mapper\\DepthMeasure" + (FILENAME) + ".dat");
-		StreamInfraredArray.open("V:\\Eng\\FrameData\\InfraredMeasure" + (FILENAME) + ".dat");
-		WriteFrameSize.open("V:\\EnglishPaperPresentation\\Mapper\\sizeofframe" + (FILENAME) + ".dat");
-		StreamMapper.open("V:\\EnglishPaperPresentation\\Mapper\\Mapper" + (FILENAME)+".dat");
+		string PassUnix = "/home/mkuser/KinectIR/newversion/";
+		StreamCenterDepth.open(Pass + "DepthCenter" + (FILENAME) + ".dat");
+		StreamCenterInfrared.open(Pass + "InfraredCenter"+ (FILENAME) + ".dat");
+		Pass = "V:\\KinectIR\\cplusplus\\";
+		DepthPass = Pass + "Depth" + (FILENAME)+".dat";
+		infraredPass = Pass + "Infrared" + (FILENAME)+".dat";
+		DepthPassUnix = PassUnix + "Depth" + (FILENAME)+".dat";
+		infraredPass = PassUnix + "Infrared" + (FILENAME)+".dat";
+
+		StreamDepthArray.open(DepthPass);
+		StreamInfraredArray.open(infraredPass);
+
+		WriteFrameSizeDepth.open(Pass + "sizeofframe" + (FILENAME) + "Depth.dat");
+		WriteFrameSizeInfrared.open(Pass + "sizeofframe" + (FILENAME)+"Infrared.dat");
+		StreamMapper.open(Pass + "Mapper" + (FILENAME)+".dat");
 		
 		Begin.x = R1.x <= R2.x ? R1.x : R2.x;
 		End.x = R1.x > R2.x ? R1.x : R2.x;
@@ -424,7 +448,16 @@ private:
 		StreamInfraredArray << std::endl;
 		savingFlag = false;
 		arrayResized = false;
-		WriteFrameSize << SizeofCaputuredFrame.x << "\r\n" << SizeofCaputuredFrame.y << "\r\n" << WRITEFRAMENUM << endl;
+		WriteFrameSizeDepth << SizeofCaputuredFrame.x << "\r\n" << SizeofCaputuredFrame.y << "\r\n" << WRITEFRAMENUM << "\r\n";
+		WriteFrameSizeDepth << "Depth\r\n";
+		WriteFrameSizeDepth << DepthPass + "\r\nUnix\r\n" + DepthPassUnix + "\r\n";
+
+		WriteFrameSizeInfrared << SizeofCaputuredFrame.x << "\r\n" << SizeofCaputuredFrame.y << "\r\n" << WRITEFRAMENUM << "\r\n";
+		WriteFrameSizeInfrared << "Infrared\r\n";
+		WriteFrameSizeInfrared << infraredPass + "\r\nUnix\r\n" + InfraredPassUnix + "\r\n";
+
+
+
 	}
 
 	void setTextOver(){
@@ -465,6 +498,7 @@ private:
 
 		}
 	}
+
 
 };
 
